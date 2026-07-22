@@ -1,0 +1,110 @@
+{% extends 'base.html' %}
+
+{% block title %}Admin Dashboard - DataMindsLab{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="fw-bold text-dark">Admin Dashboard</h2>
+    <a href="{{ url_for('admin.add_ebook') }}" class="btn btn-success"><i class="bi bi-plus-lg me-1"></i> Add New eBook</a>
+</div>
+
+<!-- Key Metrics -->
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="card border-0 bg-primary text-white p-3 shadow-sm rounded-3">
+            <h6 class="text-uppercase fw-bold opacity-75">Total eBooks</h6>
+            <h2 class="fw-bold mb-0">{{ ebooks|length }}</h2>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card border-0 bg-success text-white p-3 shadow-sm rounded-3">
+            <h6 class="text-uppercase fw-bold opacity-75">Completed Orders</h6>
+            <h2 class="fw-bold mb-0">{{ orders|selectattr('status', 'equalto', 'PAID')|list|length }}</h2>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card border-0 bg-dark text-white p-3 shadow-sm rounded-3">
+            <h6 class="text-uppercase fw-bold opacity-75">Total Revenue</h6>
+            <h2 class="fw-bold mb-0">₹{{ "%.2f"|format(total_revenue) }}</h2>
+        </div>
+    </div>
+</div>
+
+<!-- Tabs -->
+<ul class="nav nav-tabs mb-3" id="adminTab" role="tablist">
+    <li class="nav-item">
+        <button class="nav-link active fw-bold" id="ebooks-tab" data-bs-toggle="tab" data-bs-target="#ebooks-pane">Catalog eBooks</button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link fw-bold" id="orders-tab" data-bs-toggle="tab" data-bs-target="#orders-pane">Transactions History</button>
+    </li>
+</ul>
+
+<div class="tab-content bg-white p-3 rounded-3 border shadow-sm">
+    <!-- eBooks Table -->
+    <div class="tab-pane fade show active" id="ebooks-pane">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>ID</th>
+                        <th>Title</th>
+                        <th>Author</th>
+                        <th>Price</th>
+                        <th>Added Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ebook in ebooks %}
+                    <tr>
+                        <td>{{ ebook.id }}</td>
+                        <td><strong>{{ ebook.title }}</strong></td>
+                        <td>{{ ebook.author }}</td>
+                        <td>₹{{ "%.2f"|format(ebook.price) }}</td>
+                        <td>{{ ebook.created_at.strftime('%Y-%m-%d') }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Orders Table -->
+    <div class="tab-pane fade" id="orders-pane">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Order #</th>
+                        <th>Customer</th>
+                        <th>Email</th>
+                        <th>Book ID</th>
+                        <th>Amount</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for order in orders %}
+                    <tr>
+                        <td><code>{{ order.order_number[:8] }}...</code></td>
+                        <td>{{ order.customer_name }}</td>
+                        <td>{{ order.customer_email }}</td>
+                        <td>{{ order.ebook_id }}</td>
+                        <td>₹{{ "%.2f"|format(order.amount) }}</td>
+                        <td>
+                            {% if order.status == 'PAID' %}
+                                <span class="badge bg-success">PAID</span>
+                            {% elif order.status == 'PENDING' %}
+                                <span class="badge bg-warning text-dark">PENDING</span>
+                            {% else %}
+                                <span class="badge bg-danger">FAILED</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

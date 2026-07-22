@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+
+{% block title %}Payment Successful - DataMindsLab{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8 text-center">
+        <div class="card border-0 shadow-sm p-5 rounded-3">
+            <div class="mb-3 text-success">
+                <i class="bi bi-check-circle-fill display-1"></i>
+            </div>
+            <h2 class="fw-bold text-dark mb-2">Payment Successful!</h2>
+            <p class="text-muted mb-4">Thank you for your purchase, <strong>{{ order.customer_name }}</strong>.</p>
+
+            <div class="card bg-light border-0 mb-4 text-start p-3">
+                <div class="card-body">
+                    <h6 class="fw-bold text-secondary border-bottom pb-2 mb-3">Order Details</h6>
+                    <p class="mb-1"><strong>Order ID:</strong> <code>{{ order.order_number }}</code></p>
+                    <p class="mb-1"><strong>Payment ID:</strong> <code>{{ order.razorpay_payment_id }}</code></p>
+                    <p class="mb-1"><strong>eBook Title:</strong> {{ ebook.title }}</p>
+                    <p class="mb-0"><strong>Amount Paid:</strong> ₹{{ "%.2f"|format(order.amount) }}</p>
+                </div>
+            </div>
+
+            <a href="{{ url_for('ebook.download_file', token=order.download_token) }}" class="btn btn-success btn-lg px-5 fw-bold shadow-sm">
+                <i class="bi bi-download me-2"></i>Download PDF
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

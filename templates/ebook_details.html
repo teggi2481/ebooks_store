@@ -1,0 +1,199 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ ebook.title }} - DataMindsLab{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <nav aria-label="breadcrumb" class="mb-3">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{{ url_for('home.index') }}">Catalog</a></li>
+                <li class="breadcrumb-item active" aria-current="page">{{ ebook.title }}</li>
+            </ol>
+        </nav>
+
+        <div class="card border-0 shadow-sm rounded-3 p-4">
+            <div class="row g-4 align-items-center">
+                <div class="col-md-5 text-center">
+                    <img src="{{ url_for('uploaded_cover', filename=ebook.cover_image.replace('covers/', '')) }}" 
+                         class="img-fluid rounded shadow-sm" alt="{{ ebook.title }}" style="max-height: 350px; object-fit: cover;">
+                </div>
+                <div class="col-md-7">
+                    <h2 class="fw-bold text-dark mb-1">{{ ebook.title }}</h2>
+                    <p class="text-muted mb-3">By <strong>{{ ebook.author }}</strong></p>
+                    
+                    <h3 class="text-primary fw-bold mb-3">₹{{ "%.2f"|format(ebook.price) }}</h3>
+                    <p class="text-secondary line-height-lg mb-4">{{ ebook.description }}</p>
+
+                    <form id="checkout-form" class="row g-3">
+                        <input type="hidden" id="ebook_id" value="{{ ebook.id }}">
+                        <div class="col-12">
+                            <label for="customer_name" class="form-label fw-bold">Your Name</label>
+                            <input type="text" class="form-control" id="customer_name" required placeholder="John Doe">
+                        </div>
+                        <div class="col-12">
+                            <label for="customer_email" class="form-label fw-bold">Email Address (for download link)</label>
+                            <input type="email" class="form-control" id="customer_email" required placeholder="john@example.com">
+                        </div>
+                        <div class="col-12 mt-4">
+                            <button type="button" id="pay-button" class="btn btn-primary btn-lg w-100 py-3 fw-bold">
+                                <i class="bi bi-shield-lock-fill me-2"></i>Buy with Razorpay
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- 1. Include Razorpay Checkout SDK -->
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+
+<!-- 2. Razorpay Integration & Checkout Script -->
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const payButton = document.getElementById("pay-button");
+
+    if (payButton) {
+        payButton.addEventListener("click", async function (e) {
+            e.preventDefault();
+
+            const ebookId = document.getElementById("ebook_id")?.value;
+            const name = document.getElementById("customer_name")?.value.trim();
+            const email = document.getElementById("customer_email")?.value.trim();
+            
+            // Jinja safely injects the Flask configuration key
+            const razorpayKey = "{{ razorpay_key_id }}";
+
+            // DEBUG 1: Input values verification
+            console.log("--- [DEBUG 1] Form Inputs ---");
+            console.log("ebookId:", ebookId);
+            console.log("name:", name);
+            console.log("email:", email);
+            console.log("Razorpay Key ID:", razorpayKey);
+
+            if (!name || !email) {
+                alert("Please fill in both your name and email address before proceeding.");
+                return;
+            }
+
+            if (!razorpayKey || razorpayKey.trim() === "") {
+                alert("Configuration Error: Razorpay Key ID was not passed from backend context.");
+                return;
+            }
+
+            // Disable button during processing
+            payButton.disabled = true;
+            payButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Initializing...';
+
+            try {
+                // DEBUG 2: Check if Razorpay SDK is loaded globally
+                console.log("--- [DEBUG 2] Checking Razorpay SDK ---");
+                if (typeof Razorpay === "undefined") {
+                    throw new Error("Razorpay SDK is not loaded! Check your internet connection or script URL.");
+                } else {
+                    console.log("✅ Razorpay SDK is available.");
+                }
+
+                // 1. Call Flask Backend to create Razorpay Order
+                console.log("--- [DEBUG 3] Requesting /payment/create-order ---");
+                const response = await fetch("/payment/create-order", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ ebook_id: ebookId, name: name, email: email })
+                });
+
+                console.log("HTTP Response Status:", response.status, response.statusText);
+
+                const data = await response.json();
+                console.log("Backend Order Creation Data:", data);
+
+                if (!response.ok) {
+                    alert(data.error || "Failed to initialize payment order.");
+                    resetPayButton();
+                    return;
+                }
+
+                // 2. Setup Razorpay Modal Options
+                console.log("--- [DEBUG 4] Configuring Razorpay Options ---");
+                const options = {
+                    key: razorpayKey,
+                    amount: data.amount,
+                    currency: data.currency || "INR",
+                    name: "DataMindsLab",
+                    description: "{{ ebook.title }}",
+                    order_id: data.razorpay_order_id,
+                    prefill: {
+                        name: name,
+                        email: email
+                    },
+                    handler: async function (paymentResponse) {
+                        console.log("--- [DEBUG 5] Payment Success Callback ---", paymentResponse);
+                        payButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Verifying Payment...';
+                        
+                        // 3. Verify Razorpay Signature on Backend
+                        const verifyRes = await fetch("/payment/verify", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                                razorpay_order_id: paymentResponse.razorpay_order_id,
+                                razorpay_payment_id: paymentResponse.razorpay_payment_id,
+                                razorpay_signature: paymentResponse.razorpay_signature
+                            })
+                        });
+
+                        const verifyData = await verifyRes.json();
+                        console.log("Backend Verification Data:", verifyData);
+
+                        if (verifyRes.ok && verifyData.status === "success") {
+                            window.location.href = `/payment/success/${verifyData.download_token}`;
+                        } else {
+                            alert(verifyData.message || "Payment verification failed.");
+                            resetPayButton();
+                        }
+                    },
+                    modal: {
+                        ondismiss: function() {
+                            console.log("--- [DEBUG] Razorpay Modal Dismissed by User ---");
+                            resetPayButton();
+                        }
+                    },
+                    theme: { color: "#0b5ed7" }
+                };
+
+                console.log("Instantiating Razorpay object with options:", options);
+
+                // 3. Open Razorpay Checkout Window
+                const rzp = new Razorpay(options);
+
+                rzp.on('payment.failed', function (response){
+                    console.error("--- [DEBUG] Payment Failed Handler ---", response.error);
+                    alert("Payment Failed: " + response.error.description);
+                    resetPayButton();
+                });
+
+                rzp.open();
+
+            } catch (err) {
+                // Catch block error reporting
+                console.error("--- [DEBUG CATCH BLOCK] Detailed Error Log ---");
+                console.error("Error Name:", err.name);
+                console.error("Error Message:", err.message);
+                console.error("Error Stack:", err.stack);
+                
+                alert(`Debug Error Caught:\n\nName: ${err.name}\nMessage: ${err.message}`);
+                resetPayButton();
+            }
+        });
+    }
+
+    function resetPayButton() {
+        payButton.disabled = false;
+        payButton.innerHTML = '<i class="bi bi-shield-lock-fill me-2"></i>Buy with Razorpay';
+    }
+});
+</script>
+{% endblock %}
